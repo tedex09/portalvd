@@ -7,6 +7,7 @@ interface RequestsState {
   error: string | null;
   fetchRequests: () => Promise<void>;
   updateRequestStatus: (requestId: string, status: string) => Promise<void>;
+  updateRequestWithRejection: (requestId: string, status: string, rejectionReason: string) => Promise<void>;
   optimisticUpdateStatus: (requestId: string, status: string) => void;
 }
 
@@ -57,6 +58,39 @@ export const useRequestsStore = create<RequestsState>((set, get) => ({
       );
       
       set({ requests });
+    } catch (error) {
+      // Revert optimistic update on error
+      await get().fetchRequests();
+      throw error;
+    }
+  },
+
+  updateRequestWithRejection: async (requestId: string, status: string, rejectionReason: string) => {
+    try {
+      // Optimistically update the UI
+      const requests = get().requests.map(request => 
+        request._id === requestId ? { ...request, status, rejectionReason } : request
+      );
+      set({ requests });
+
+      const response = await fetch(`/api/admin/requests/${requestId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: requestId, status, rejectionReason })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update status with rejection reason');
+      }
+
+      const updatedRequest = await response.json();
+      
+      // Update with server response to ensure consistency
+      const updatedRequests = get().requests.map(request => 
+        request._id === requestId ? { ...request, ...updatedRequest } : request
+      );
+      
+      set({ requests: updatedRequests });
     } catch (error) {
       // Revert optimistic update on error
       await get().fetchRequests();

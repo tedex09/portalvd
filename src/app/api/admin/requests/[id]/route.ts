@@ -58,9 +58,15 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Request not found" }, { status: 404 });
     }
 
+    // Update the request with new status and rejection reason if provided
+    const updateData: any = { status: body.status };
+    if (body.rejectionReason) {
+      updateData.rejectionReason = body.rejectionReason;
+    }
+
     const request = await Request.findByIdAndUpdate(
       body.id,
-      { status: body.status },
+      updateData,
       { new: true }
     );
 
@@ -74,7 +80,7 @@ export async function PUT(req: NextRequest) {
             pending: "Sua solicitação está pendente de análise.",
             in_progress: "Sua solicitação está em análise pela nossa equipe.",
             completed: "Sua solicitação foi concluída com sucesso!",
-            rejected: "Sua solicitação foi rejeitada. Entre em contato para mais informações."
+            rejected: `Sua solicitação foi rejeitada. ${body.rejectionReason ? `Motivo: ${body.rejectionReason}` : "Entre em contato para mais informações."}`
           };
           
           const message = `*Atualização de Solicitação*\n\nOlá ${user.name},\n\nSua solicitação para "${currentRequest.mediaTitle}" teve o status atualizado para: *${statusMessages[body.status] || body.status}*\n\nAcesse a plataforma para mais detalhes.`;

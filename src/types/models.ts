@@ -20,6 +20,9 @@ export interface Request {
   status: "pending" | "in_progress" | "completed" | "rejected";
   description?: string;
   notifyWhatsapp: boolean;
+  whatsapp?: string;
+  counter: number;
+  rejectionReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }

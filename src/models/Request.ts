@@ -14,6 +14,12 @@ const requestSchema = new mongoose.Schema({
   },
   description: String,
   notifyWhatsapp: { type: Boolean, default: false },
+  counter: { type: Number, default: 1 },
+  rejectionReason: { type: String, default: '' },
+  whatsapp: String,
 }, { timestamps: true });
+
+// Index for finding duplicate requests
+requestSchema.index({ mediaId: 1, mediaType: 1, type: 1 });
 
 export default mongoose.models.Request || mongoose.model('Request', requestSchema);

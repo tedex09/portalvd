@@ -44,12 +44,36 @@ export async function POST(req: Request) {
     const body = await req.json();
     await dbConnect();
     
-    const request = await Request.create({
-      ...body,
-      userId: session.user.id
+    // Check if there's an existing request with the same media and type
+    const existingRequest = await Request.findOne({
+      mediaId: body.mediaId,
+      mediaType: body.mediaType,
+      type: body.type
     });
 
-    return NextResponse.json(request, { status: 201 });
+    if (existingRequest) {
+      // Increment the counter of the existing request
+      existingRequest.counter += 1;
+      await existingRequest.save();
+      
+      // Create a new request with the incremented counter
+      const request = await Request.create({
+        ...body,
+        userId: session.user.id,
+        counter: existingRequest.counter
+      });
+      
+      return NextResponse.json(request, { status: 201 });
+    } else {
+      // Create a new request with counter = 1
+      const request = await Request.create({
+        ...body,
+        userId: session.user.id,
+        counter: 1
+      });
+      
+      return NextResponse.json(request, { status: 201 });
+    }
   } catch (error) {
     return NextResponse.json(
       { error: "Internal Server Error" },

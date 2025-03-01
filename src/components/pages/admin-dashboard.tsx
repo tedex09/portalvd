@@ -24,6 +24,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { useRequestsStore } from "@/stores/requests";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,6 +32,9 @@ import { signOut } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -43,12 +47,42 @@ export function AdminDashboard() {
   const [selectedRequestId, setSelectedRequestId] = useState("");
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("low_demand");
+  const [customRejectionReason, setCustomRejectionReason] = useState("");
   const isMobile = useIsMobile();
 
-  const { requests, isLoading, fetchRequests, updateRequestStatus } = useRequestsStore();
+  const { requests, isLoading, fetchRequests, updateRequestStatus, updateRequestWithRejection } = useRequestsStore();
 
   useEffect(() => {
     fetchRequests();
+  }, [fetchRequests]);
+
+  useEffect(() => {
+    // Set up a daily check for low-demand requests
+    const checkLowDemandRequests = async () => {
+      try {
+        const response = await fetch('/api/admin/requests/check-low-demand', {
+          method: 'POST'
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.updated > 0) {
+            toast.info(`${data.updated} solicitações com baixa demanda foram rejeitadas automaticamente.`);
+            fetchRequests();
+          }
+        }
+      } catch (error) {
+        console.error('Error checking low demand requests:', error);
+      }
+    };
+
+    // Run once when component mounts
+    checkLowDemandRequests();
+
+    // Set up daily check
+    const interval = setInterval(checkLowDemandRequests, 24 * 60 * 60 * 1000);
+    return () => clearInterval(interval);
   }, [fetchRequests]);
 
   const metrics = {
@@ -74,6 +108,12 @@ export function AdminDashboard() {
 
   const handleStatusChange = async (requestId: string, newStatus: string) => {
     try {
+      if (newStatus === "rejected") {
+        setSelectedRequestId(requestId);
+        setRejectionDialogOpen(true);
+        return;
+      }
+      
       setUpdatingStatus(requestId);
       await updateRequestStatus(requestId, newStatus);
       toast.success("Status atualizado ✨", {
@@ -81,6 +121,36 @@ export function AdminDashboard() {
       });
     } catch (error) {
       toast.error("Erro ao atualizar status", {
+        description: "Tente novamente mais tarde",
+      });
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const handleRejectConfirm = async () => {
+    try {
+      setUpdatingStatus(selectedRequestId);
+      
+      const reason = rejectionReason === "custom" 
+        ? customRejectionReason 
+        : rejectionReason === "low_demand" 
+          ? "Baixa demanda" 
+          : rejectionReason === "unavailable" 
+            ? "Conteúdo indisponível" 
+            : "Solicitação rejeitada";
+      
+      await updateRequestWithRejection(selectedRequestId, "rejected", reason);
+      
+      toast.success("Solicitação rejeitada", {
+        description: "A solicitação foi rejeitada com sucesso!",
+      });
+      
+      setRejectionDialogOpen(false);
+      setRejectionReason("low_demand");
+      setCustomRejectionReason("");
+    } catch (error) {
+      toast.error("Erro ao rejeitar solicitação", {
         description: "Tente novamente mais tarde",
       });
     } finally {
@@ -398,6 +468,8 @@ export function AdminDashboard() {
                               {request.type === "fix" && "Corrigir"}
                               {" • "}
                               {new Date(request.createdAt).toLocaleDateString()}
+                              {" • "}
+                              <span className="text-yellow-400">#{request.counter || 1}</span>
                             </p>
                             <div className="flex items-center justify-between">
                               <div className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
@@ -456,6 +528,7 @@ export function AdminDashboard() {
                     <TableHead>Mídia</TableHead>
                     <TableHead>Título</TableHead>
                     <TableHead>Tipo</TableHead>
+                    <TableHead>Contador</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Data</TableHead>
                     <TableHead>Ações</TableHead>
@@ -468,6 +541,7 @@ export function AdminDashboard() {
                         <TableCell><Skeleton className="h-[68px] w-[45px] rounded-md" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-[30px]" /></TableCell>
                         <TableCell><Skeleton className="h-8 w-[140px]" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
                         <TableCell><Skeleton className="h-8 w-[120px]" /></TableCell>
@@ -495,7 +569,7 @@ export function AdminDashboard() {
                               />
                             ) : (
                               <div className="w-[45px] h-[68px] bg-[#282828] rounded-md flex items-center justify-center">
-                                <PlaySquare className="w-6 h-6 text-gray-400" />
+                                <PlaySquare className="h-6 w-6 text-gray-400" />
                               </div>
                             )}
                           </TableCell>
@@ -504,6 +578,9 @@ export function AdminDashboard() {
                             {request.type === "add" && "Adicionar"}
                             {request.type === "update" && "Atualizar"}
                             {request.type === "fix" && "Corrigir"}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-yellow-400 font-bold">#{request.counter || 1}</span>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -609,6 +686,55 @@ export function AdminDashboard() {
               <Copy className="h-4 w-4" />
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rejection Reason Dialog */}
+      <Dialog open={rejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Motivo da Rejeição</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <RadioGroup value={rejectionReason} onValueChange={setRejectionReason}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="low_demand" id="low_demand" />
+                <Label htmlFor="low_demand">Baixa demanda</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="unavailable" id="unavailable" />
+                <Label htmlFor="unavailable">Conteúdo indisponível</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="custom" id="custom" />
+                <Label htmlFor="custom">Outro motivo</Label>
+              </div>
+            </RadioGroup>
+            
+            {rejectionReason === "custom" && (
+              <div className="space-y-2">
+                <Label htmlFor="custom_reason">Especifique o motivo</Label>
+                <Textarea 
+                  id="custom_reason" 
+                  placeholder="Digite o motivo da rejeição..."
+                  value={customRejectionReason}
+                  onChange={(e) => setCustomRejectionReason(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectionDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleRejectConfirm}
+              disabled={rejectionReason === "custom" && !customRejectionReason.trim()}
+              className="bg-[#B91D3A] hover:bg-[#D71E50]"
+            >
+              Confirmar Rejeição
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
