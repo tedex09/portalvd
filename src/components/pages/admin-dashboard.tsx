@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   PlaySquare, Search, Clock, CheckCircle2, 
-  AlertCircle, Users, Settings, ChevronRight, 
+  AlertCircle, Users, UsersRound, Settings, Eye, 
   Share2, Copy, ArrowLeft, ArrowRight, LogOut, BarChart3, Menu, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,12 +42,14 @@ export function AdminDashboard() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [counterFilter, setCounterFilter] = useState("high");
   const [currentPage, setCurrentPage] = useState(1);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selectedRequestId, setSelectedRequestId] = useState("");
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
+  const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("low_demand");
   const [customRejectionReason, setCustomRejectionReason] = useState("");
   const isMobile = useIsMobile();
@@ -93,18 +95,42 @@ export function AdminDashboard() {
     rejected: requests?.filter(r => r.status === "rejected").length || 0
   };
 
+  // Filter requests and remove duplicates
   const filteredRequests = requests ? requests.filter(request => {
     const matchesSearch = request.mediaTitle?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || request.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesCounter = counterFilter === "all" || 
+                          (counterFilter === "high" && request.counter >= 4) || 
+                          (counterFilter === "low" && request.counter < 4);
+    return matchesSearch && matchesStatus && matchesCounter;
   }) : [];
 
-  const paginatedRequests = filteredRequests.slice(
+  // Remove duplicate content requests (same mediaId, mediaType, and type)
+  const uniqueRequests = filteredRequests.reduce((acc, current) => {
+    const key = `${current.mediaId}-${current.mediaType}-${current.type}`;
+    const existingIndex = acc.findIndex(item => 
+      `${item.mediaId}-${item.mediaType}-${item.type}` === key
+    );
+    
+    if (existingIndex === -1) {
+      // If not found, add to accumulator
+      acc.push(current);
+    } else {
+      // If found and current has higher counter, replace
+      if (current.counter > acc[existingIndex].counter) {
+        acc[existingIndex] = current;
+      }
+    }
+    
+    return acc;
+  }, []);
+
+  const paginatedRequests = uniqueRequests.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
 
-  const totalPages = Math.ceil(filteredRequests.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(uniqueRequests.length / ITEMS_PER_PAGE);
 
   const handleStatusChange = async (requestId: string, newStatus: string) => {
     try {
@@ -119,6 +145,9 @@ export function AdminDashboard() {
       toast.success("Status atualizado ✨", {
         description: "A solicitação foi atualizada com sucesso!",
       });
+
+      // Clear Redis cache
+      await fetch('/api/admin/requests/clear-cache', { method: 'POST' });
     } catch (error) {
       toast.error("Erro ao atualizar status", {
         description: "Tente novamente mais tarde",
@@ -141,6 +170,8 @@ export function AdminDashboard() {
             : "Solicitação rejeitada";
       
       await updateRequestWithRejection(selectedRequestId, "rejected", reason);
+      // Clear Redis cache
+      await fetch('/api/admin/requests/clear-cache', { method: 'POST' });
       
       toast.success("Solicitação rejeitada", {
         description: "A solicitação foi rejeitada com sucesso!",
@@ -161,6 +192,10 @@ export function AdminDashboard() {
   const handleShare = (requestId: string) => {
     setSelectedRequestId(requestId);
     setShareDialogOpen(true);
+  };
+
+  const handleUsers = () => {
+    setUsersDialogOpen(true);
   };
 
   const requestLink = typeof window !== "undefined" 
@@ -405,9 +440,19 @@ export function AdminDashboard() {
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="pending">Pendente</SelectItem>
-                  <SelectItem value="in_progress">Em análise</SelectItem>
+                  <SelectItem value="in_progress">Análise</SelectItem>
                   <SelectItem value="completed">Concluído</SelectItem>
                   <SelectItem value="rejected">Rejeitado</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={counterFilter} onValueChange={setCounterFilter}>
+                <SelectTrigger className="w-full md:w-[180px] bg-[#282828] border-none">
+                  <SelectValue placeholder="Demanda" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="high">Alta demanda (≥4)</SelectItem>
+                  <SelectItem value="low">Baixa demanda (&lt;4)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -525,10 +570,10 @@ export function AdminDashboard() {
               <Table>
                 <TableHeader className="bg-[#282828]">
                   <TableRow>
-                    <TableHead>Mídia</TableHead>
+                    <TableHead>Capa</TableHead>
                     <TableHead>Título</TableHead>
                     <TableHead>Tipo</TableHead>
-                    <TableHead>Contador</TableHead>
+                    <TableHead>Demanda</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Data</TableHead>
                     <TableHead>Ações</TableHead>
@@ -612,14 +657,21 @@ export function AdminDashboard() {
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
+                            <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => router.push(`/request/${request._id}`)}
+                                className="hover:bg-[#3E3E3E]"
+                              >
+                                <UsersRound className="h-4 w-4" />
+                              </Button>
                               <Button 
                                 variant="ghost" 
                                 size="sm"
                                 onClick={() => router.push(`/request/${request._id}`)}
                                 className="hover:bg-[#3E3E3E]"
                               >
-                                Ver detalhes
-                                <ChevronRight className="ml-2 h-4 w-4" />
+                                <Eye className="h-4 w-4" />
                               </Button>
                               <Button
                                 variant="ghost"
@@ -666,6 +718,18 @@ export function AdminDashboard() {
           </motion.div>
         </div>
       </div>
+
+      {/* Users Dialog */}
+      <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Solicitantes</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-2 mt-4">
+            {/* Solicitantes aqui */}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Share Dialog */}
       <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>

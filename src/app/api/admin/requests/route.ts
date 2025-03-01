@@ -29,7 +29,6 @@ export async function GET(req: NextRequest) {
       Request.find()
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit)
         .populate("userId", "name email"),
       Request.countDocuments()
     ]);

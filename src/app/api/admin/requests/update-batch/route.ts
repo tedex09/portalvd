@@ -4,6 +4,7 @@ import dbConnect from "@/lib/db";
 import Request from "@/models/Request";
 import User from "@/models/User";
 import { sendWhatsAppNotification } from "@/lib/twilio";
+import { cacheDelete } from "@/lib/redis";
 
 export async function PUT(req: NextRequest) {
   try {
@@ -67,6 +68,8 @@ export async function PUT(req: NextRequest) {
         }
       }
     }
+
+    //await cacheDelete('admin:requests:*');
 
     return NextResponse.json({ 
       success: true, 
