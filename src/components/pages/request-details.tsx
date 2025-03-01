@@ -31,6 +31,16 @@ import { motion } from "framer-motion";
 import { useRequestsStore } from "@/stores/requests";
 import { Separator } from "@/components/ui/separator";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter 
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
 
 const statusMap = {
   pending: { label: "Pendente", color: "bg-yellow-500", icon: Clock },
@@ -50,12 +60,20 @@ export function RequestDetails({ request, isOwner, isAdmin }) {
   const [status, setStatus] = useState(request.status);
   const [isDeleting, setIsDeleting] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("low_demand");
+  const [customRejectionReason, setCustomRejectionReason] = useState("");
   const isMobile = useIsMobile();
 
-  const { updateRequestStatus } = useRequestsStore();
+  const { updateRequestStatus, updateRequestWithRejection } = useRequestsStore();
 
   const handleStatusChange = async (requestId: string, newStatus: string) => {
     try {
+      if (newStatus === "rejected") {
+        setRejectionDialogOpen(true);
+        return;
+      }
+      
       setUpdatingStatus(requestId);
       await updateRequestStatus(requestId, newStatus);
       setStatus(newStatus);
@@ -64,6 +82,37 @@ export function RequestDetails({ request, isOwner, isAdmin }) {
       });
     } catch (error) {
       toast.error("Erro ao atualizar status", {
+        description: "Tente novamente mais tarde",
+      });
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const handleRejectConfirm = async () => {
+    try {
+      setUpdatingStatus(request._id);
+      
+      const reason = rejectionReason === "custom" 
+        ? customRejectionReason 
+        : rejectionReason === "low_demand" 
+          ? "Baixa demanda" 
+          : rejectionReason === "unavailable" 
+            ? "Conteúdo indisponível" 
+            : "Solicitação rejeitada";
+      
+      await updateRequestWithRejection(request._id, "rejected", reason);
+      setStatus("rejected");
+      
+      toast.success("Solicitação rejeitada", {
+        description: "A solicitação foi rejeitada com sucesso!",
+      });
+      
+      setRejectionDialogOpen(false);
+      setRejectionReason("low_demand");
+      setCustomRejectionReason("");
+    } catch (error) {
+      toast.error("Erro ao rejeitar solicitação", {
         description: "Tente novamente mais tarde",
       });
     } finally {
@@ -210,6 +259,22 @@ export function RequestDetails({ request, isOwner, isAdmin }) {
                     </div>
                   )}
                   
+                  {status === "rejected" && request.rejectionReason && (
+                    <div className="space-y-2">
+                      <h2 className="text-xl font-semibold flex items-center gap-2">
+                        <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                        <AlertCircle className="h-4 w-4 mr-1 text-red-500" />
+                        Motivo da Rejeição
+                      </h2>
+                      <Separator />
+                      <div className="bg-red-500/10 p-4 rounded-md border border-red-500/20">
+                        <p className="text-sm whitespace-pre-wrap text-red-400">
+                          {request.rejectionReason}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
                   {isAdmin && (
                     <div className="space-y-2 pt-4">
                       <h2 className="text-xl font-semibold flex items-center gap-2">
@@ -285,7 +350,7 @@ export function RequestDetails({ request, isOwner, isAdmin }) {
               <div className="space-y-8">
                 {/* Pending */}
                 <div className="relative pl-12">
-                  <div className={`absolute left-0 w-10 h-10 rounded-full flex items-center justify-center ${status === 'pending' ? 'bg-yellow-500 text-black' : (status === 'in_progress' || status === 'completed' || status === 'rejected') ? 'bg-green-500 text-black' : 'bg-muted text-muted-foreground'}`}>
+                  <div className={`absolute left-0 w-10 h-10 rounded-full flex items-center justify-center ${status === 'pending' ? 'bg-yellow-500 text-black' : (status === 'in_progress' || status === 'completed' || status === 'rejected') ? 'bg-green-500 text-black' : 'bg-muted text-mute d-foreground'}`}>
                     <CheckCircle2 className="h-5 w-5" />
                   </div>
                   <h3 className="font-medium">Solicitação Recebida</h3>
@@ -326,6 +391,55 @@ export function RequestDetails({ request, isOwner, isAdmin }) {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Rejection Reason Dialog */}
+      <Dialog open={rejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Motivo da Rejeição</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <RadioGroup value={rejectionReason} onValueChange={setRejectionReason}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="low_demand" id="low_demand" />
+                <Label htmlFor="low_demand">Baixa demanda</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="unavailable" id="unavailable" />
+                <Label htmlFor="unavailable">Conteúdo indisponível</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="custom" id="custom" />
+                <Label htmlFor="custom">Outro motivo</Label>
+              </div>
+            </RadioGroup>
+            
+            {rejectionReason === "custom" && (
+              <div className="space-y-2">
+                <Label htmlFor="custom_reason">Especifique o motivo</Label>
+                <Textarea 
+                  id="custom_reason" 
+                  placeholder="Digite o motivo da rejeição..."
+                  value={customRejectionReason}
+                  onChange={(e) => setCustomRejectionReason(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectionDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleRejectConfirm}
+              disabled={rejectionReason === "custom" && !customRejectionReason.trim()}
+              className="bg-[#B91D3A] hover:bg-[#D71E50]"
+            >
+              Confirmar Rejeição
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
