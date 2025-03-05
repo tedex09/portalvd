@@ -22,6 +22,18 @@ const settingsSchema = new mongoose.Schema({
   registrationEnabled: {
     type: Boolean,
     default: true
+  },
+  lowDemandRejectionHours: {
+    type: Number,
+    default: 24 // Default 24 hours
+  },
+  highDemandThreshold: {
+    type: Number,
+    default: 4
+  },
+  lowDemandRejectionMessage: {
+    type: String,
+    default: 'Baixa demanda'
   }
 }, { 
   timestamps: true,

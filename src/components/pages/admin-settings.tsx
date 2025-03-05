@@ -52,6 +52,9 @@ const settingsSchema = z.object({
   platformEnabled: z.boolean(),
   disabledMessage: z.string().optional(),
   registrationEnabled: z.boolean(),
+  lowDemandRejectionHours: z.number().min(12),
+  highDemandThreshold: z.number().min(1),
+  lowDemandRejectionMessage: z.string(),
 });
 
 export function AdminSettings() {
@@ -75,7 +78,7 @@ export function AdminSettings() {
       form.reset(data);
       setSettings(data);
       // Apply primary color to CSS variables
-      document.documentElement.style.setProperty('--primary', data.primaryColor);
+      /* document.documentElement.style.setProperty('--primary', data.primaryColor); */
     },
   });
 
@@ -92,6 +95,9 @@ export function AdminSettings() {
       platformEnabled: true,
       disabledMessage: "",
       registrationEnabled: true,
+      lowDemandRejectionHours: 24,
+      highDemandThreshold: 4,
+      lowDemandRejectionMessage: "Baixa demanda"
     },
   });
 
@@ -123,7 +129,7 @@ export function AdminSettings() {
     onSuccess: (data) => {
       setSettings(data);
       // Apply primary color to CSS variables
-      document.documentElement.style.setProperty('--primary', data.primaryColor);
+      /* document.documentElement.style.setProperty('--primary', data.primaryColor); */
       toast.success("Configurações salvas", {
         description: "As alterações foram aplicadas com sucesso",
       });
@@ -575,6 +581,80 @@ export function AdminSettings() {
                               onCheckedChange={field.onChange}
                             />
                           </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.2 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <h2 className="text-2xl font-semibold">
+                      Configurações de Demanda
+                    </h2>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="lowDemandRejectionH ours"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tempo para rejeição por baixa demanda (horas)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              {...field}
+                              onChange={(e) => field.onChange(parseInt(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Após quantas horas uma solicitação com baixa demanda deve ser rejeitada automaticamente
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="highDemandThreshold"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Limite para alta demanda</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              {...field}
+                              onChange={(e) => field.onChange(parseInt(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Número mínimo de solicitações para considerar alta demanda
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="lowDemandRejectionMessage"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Mensagem de rejeição por baixa demanda</FormLabel>
+                          <FormControl>
+                            <Input {...field} />
+                          </FormControl>
+                          <FormDescription>
+                            Mensagem exibida quando uma solicitação é rejeitada por baixa demanda
+                          </FormDescription>
+                          <FormMessage />
                         </FormItem>
                       )}
                     />

@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -34,7 +32,7 @@ import { Pencil, Trash2, UserPlus, PlaySquare, ArrowLeft, LogOut, Menu, X } from
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { signOut } from "next-auth/react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function AdminUsers() {
   const { toast } = useToast();
@@ -43,6 +41,8 @@ export function AdminUsers() {
   const [isOpen, setIsOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
   const isMobile = useIsMobile();
 
   const { data: users, isLoading } = useQuery({
@@ -131,51 +131,34 @@ export function AdminUsers() {
     }
   };
 
+  const handlePasswordChange = async () => {
+    if (!editingUser || !newPassword) return;
+
+    try {
+      setIsChangingPassword(true);
+      await updateUser.mutateAsync({
+        id: editingUser._id,
+        data: { password: newPassword }
+      });
+      setNewPassword("");
+      toast.success("Senha alterada com sucesso");
+    } catch (error) {
+      toast.error("Erro ao alterar senha");
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   const handleLogout = async () => {
     await signOut({ redirect: false });
     router.push("/login");
   };
 
-  const MobileMenu = () => (
-    <div className={`fixed inset-0 bg-black/90 backdrop-blur-md z-50 transform transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-      <div className="flex flex-col h-full p-6">
-        <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-2">
-            <PlaySquare className="w-8 h-8 text-[#B91D3A]" />
-            <h1 className="text-xl font-bold">Portal VOD</h1>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => setMobileMenuOpen(false)}
-          >
-            <X className="w-6 h-6" />
-          </Button>
-        </div>
-        
-        <div className="flex-1 flex flex-col gap-4">
-          <Button
-            variant="ghost"
-            className="w-full justify-start gap-2 mb-4"
-            onClick={() => router.push("/admin")}
-          >
-            <ArrowLeft className="w-4 h-4" /> Voltar
-          </Button>
-          <Button 
-            variant="ghost" 
-            className="w-full justify-start gap-3 text-red-400 hover:text-red-300 hover:bg-red-900/20"
-            onClick={handleLogout}
-          >
-            <LogOut className="w-5 h-5" /> Sair
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
+  const totalUsers = users?.length || 0;
 
   return (
     <div className="min-h-screen bg-[#121212] text-white">
-      {/* Mobile Header - Only visible on mobile */}
+      {/* Mobile Header */}
       {isMobile && (
         <header className="fixed top-0 left-0 right-0 h-16 bg-black/95 backdrop-blur-md z-40 flex items-center justify-between px-4 border-b border-white/10">
           <div className="flex items-center gap-2">
@@ -193,10 +176,43 @@ export function AdminUsers() {
       )}
 
       {/* Mobile Menu */}
-      {isMobile && <MobileMenu />}
+      <div className={`fixed inset-0 bg-black/90 backdrop-blur-md z-50 transform transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="flex flex-col h-full p-6">
+          <div className="flex justify-between items-center mb-8">
+            <div className="flex items-center gap-2">
+              <PlaySquare className="w-8 h-8 text-[#B91D3A]" />
+              <h1 className="text-xl font-bold">Portal VOD</h1>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <X className="w-6 h-6" />
+            </Button>
+          </div>
+          
+          <div className="flex-1 flex flex-col gap-4">
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-2 mb-4"
+              onClick={() => router.push("/admin")}
+            >
+              <ArrowLeft className="w-4 h-4" /> Voltar
+            </Button>
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start gap-3 text-red-400 hover:text-red-300 hover:bg-red-900/20"
+              onClick={handleLogout}
+            >
+              <LogOut className="w-5 h-5" /> Sair
+            </Button>
+          </div>
+        </div>
+      </div>
 
       <div className="flex flex-col md:flex-row">
-        {/* Sidebar - Hidden on mobile */}
+        {/* Sidebar */}
         <div className="hidden md:block w-64 bg-black h-screen fixed left-0 p-6">
           <div className="flex items-center gap-2 mb-8">
             <PlaySquare className="w-8 h-8 text-[#B91D3A]" />
@@ -225,7 +241,7 @@ export function AdminUsers() {
             <div>
               <h1 className="text-3xl font-bold">Gerenciar Usuários</h1>
               <p className="text-muted-foreground">
-                Gerencie os usuários do sistema
+                Total de usuários: {totalUsers}
               </p>
             </div>
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -276,6 +292,27 @@ export function AdminUsers() {
                         type="password"
                         required
                       />
+                    </div>
+                  )}
+                  {editingUser && (
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword">Nova Senha</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="newPassword"
+                          type="password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Digite a nova senha"
+                        />
+                        <Button
+                          type="button"
+                          onClick={handlePasswordChange}
+                          disabled={!newPassword || isChangingPassword}
+                        >
+                          {isChangingPassword ? "Alterando..." : "Alterar"}
+                        </Button>
+                      </div>
                     </div>
                   )}
                   <div className="space-y-2">
@@ -345,9 +382,9 @@ export function AdminUsers() {
                           <div className="flex-1">
                             <h3 className="font-medium text-sm mb-1 line-clamp-1">{user.name}</h3>
                             <p className="text-xs text-gray-400 mb-2">
-                              {user.email}
+                              {user.username || "-"}
                               {" • "}
-                              {user.whatsapp || "-"}
+                              {user.provider || "-"}
                             </p>
                             <div className="flex items-center justify-between">
                               <div className={`px-2 py-1 rounded-full text-xs font-medium ${user.role !== "admin" ? "bg-blue-500/20 text-blue-500" : "bg-red-500/20 text-red-500"}`}>
@@ -375,13 +412,15 @@ export function AdminUsers() {
                 )}
               </div>
             ) : (
+              // Desktop table view
               <Table>
                 <TableHeader className="bg-[#282828]">
                   <TableRow>
                     <TableHead>Nome</TableHead>
+                    <TableHead>Servidor</TableHead>
+                    <TableHead>Usuário</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Função</TableHead>
-                    <TableHead>WhatsApp</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -390,9 +429,10 @@ export function AdminUsers() {
                     Array(5).fill(0).map((_, index) => (
                       <TableRow key={index}>
                         <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-[140px]" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-[60px]" /></TableCell>
-                        <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-4" /></TableCell>
                       </TableRow>
                     ))
@@ -401,11 +441,12 @@ export function AdminUsers() {
                     {users?.map((user: any) => (
                       <TableRow key={user._id} className="hover:bg-[#282828]">
                         <TableCell>{user.name}</TableCell>
+                        <TableCell>{user.provider || "-"}</TableCell>
+                        <TableCell>{user.username || "-"}</TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>
                           {user.role === "admin" ? "Administrador" : "Usuário"}
                         </TableCell>
-                        <TableCell>{user.whatsapp || "-"}</TableCell>
                         <TableCell className="text-right space-x-2">
                           <Button
                             variant="outline"
@@ -435,7 +476,6 @@ export function AdminUsers() {
               </Table>
             )}
           </motion.div>
-
         </div>
       </div>
     </div>

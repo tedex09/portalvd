@@ -13,6 +13,9 @@ interface Settings {
   platformEnabled: boolean;
   disabledMessage: string;
   registrationEnabled: boolean;
+  lowDemandRejectionHours: number;
+  highDemandThreshold: number;
+  lowDemandRejectionMessage: string;
 }
 
 interface SettingsState {
@@ -32,6 +35,9 @@ export const useSettingsStore = create<SettingsState>()(
         platformEnabled: true,
         disabledMessage: '',
         registrationEnabled: true,
+        lowDemandRejectionHours: 24,
+        highDemandThreshold: 4,
+        lowDemandRejectionMessage: 'Baixa demanda'
       },
       setSettings: (newSettings) => {
         set((state) => {

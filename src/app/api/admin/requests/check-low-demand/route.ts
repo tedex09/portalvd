@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import dbConnect from "@/lib/db";
 import Request from "@/models/Request";
-import { subDays } from "date-fns";
+import Settings from "@/models/Settings";
+import { subHours } from "date-fns";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,21 +14,30 @@ export async function POST(req: NextRequest) {
 
     await dbConnect();
     
+    // Get settings
+    const settings = await Settings.findOne();
+    if (!settings) {
+      throw new Error("Settings not found");
+    }
+
+    const { lowDemandRejectionHours, highDemandThreshold, lowDemandRejectionMessage } = settings;
+    
+    // Calculate the cutoff time based on settings
+    const cutoffTime = subHours(new Date(), lowDemandRejectionHours);
+    
     // Find requests that are:
     // 1. Still pending
-    // 2. Created more than 1 day ago
-    // 3. Have a counter less than 4
-    const oneDayAgo = subDays(new Date(), 1);
-    
+    // 2. Created more than X hours ago (from settings)
+    // 3. Have a counter less than Y (from settings)
     const result = await Request.updateMany(
       { 
         status: "pending", 
-        createdAt: { $lt: oneDayAgo },
-        counter: { $lt: 4 }
+        createdAt: { $lt: cutoffTime },
+        counter: { $lt: highDemandThreshold }
       },
       { 
         status: "rejected",
-        rejectionReason: "Baixa demanda"
+        rejectionReason: lowDemandRejectionMessage
       }
     );
 
