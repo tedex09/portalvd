@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 import Settings from "@/models/Settings";
+import { validateEmail } from "@/utils/validation";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,12 +18,29 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, email, password, whatsapp } = body;
+    const { name, email, password, whatsapp, provider, username } = body;
 
     // Validate required fields
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: "Nome, email e senha são obrigatórios" },
+        { status: 400 }
+      );
+    }
+
+    // Validate required fields
+    if (!provider || !username) {
+      return NextResponse.json(
+        { error: "Nome do servidor e usuário são obrigatórios" },
+        { status: 400 }
+      );
+    }
+
+    // Validate email format and provider
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.isValid) {
+      return NextResponse.json(
+        { error: emailValidation.message },
         { status: 400 }
       );
     }
@@ -42,6 +60,8 @@ export async function POST(req: NextRequest) {
       email,
       password,
       whatsapp: whatsapp || "",
+      provider: provider || null,
+      username: username || null,
       role: "user"
     });
 

@@ -7,6 +7,8 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
   whatsapp: String,
+  provider: { type: String, default: null },
+  username: { type: String, default: null },
 }, { timestamps: true });
 
 userSchema.pre('save', async function (next) {

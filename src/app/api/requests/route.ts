@@ -44,7 +44,22 @@ export async function POST(req: Request) {
     const body = await req.json();
     await dbConnect();
     
-    // Check if there's an existing request with the same media and type
+    // Check if there's an existing request from this user with the same media and type
+    const existingUserRequest = await Request.findOne({
+      userId: session.user.id,
+      mediaId: body.mediaId,
+      mediaType: body.mediaType,
+      type: body.type
+    });
+
+    if (existingUserRequest) {
+      return NextResponse.json(
+        { error: "Você já fez uma solicitação para este conteúdo" },
+        { status: 409 }
+      );
+    }
+    
+    // Check if there's an existing request with the same media and type from any user
     const existingRequest = await Request.findOne({
       mediaId: body.mediaId,
       mediaType: body.mediaType,

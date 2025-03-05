@@ -52,6 +52,7 @@ export function AdminDashboard() {
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("low_demand");
   const [customRejectionReason, setCustomRejectionReason] = useState("");
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const isMobile = useIsMobile();
 
   const { requests, isLoading, fetchRequests, updateRequestStatus, updateRequestWithRejection } = useRequestsStore();
@@ -111,19 +112,44 @@ export function AdminDashboard() {
     const existingIndex = acc.findIndex(item => 
       `${item.mediaId}-${item.mediaType}-${item.type}` === key
     );
-    
+  
     if (existingIndex === -1) {
-      // If not found, add to accumulator
       acc.push(current);
     } else {
-      // If found and current has higher counter, replace
       if (current.counter > acc[existingIndex].counter) {
         acc[existingIndex] = current;
       }
     }
-    
+  
     return acc;
   }, []);
+
+  const [requestUsers, setRequestUsers] = useState([]);
+
+    const fetchRequestUsers = async (request: string) => {
+      try {
+        setLoadingUsers(true);
+        const response = await fetch(`/api/admin/requests/users?mediaId=${request.mediaId}&mediaType=${request.mediaType}&type=${request.type}`);
+        
+        if (!response.ok) throw new Error("Failed to fetch users");
+        
+        const data = await response.json();
+        setRequestUsers(data.users);
+      } catch (error) {
+        toast.error("Erro ao carregar usuários", {
+          description: "Não foi possível carregar a lista de usuários"
+        });
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+
+    const handleShowUsers = (request: string) => {
+      fetchRequestUsers(request);
+      setUsersDialogOpen(true);
+    };
+
+  
 
   const paginatedRequests = uniqueRequests.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
@@ -192,10 +218,6 @@ export function AdminDashboard() {
   const handleShare = (requestId: string) => {
     setSelectedRequestId(requestId);
     setShareDialogOpen(true);
-  };
-
-  const handleUsers = () => {
-    setUsersDialogOpen(true);
   };
 
   const requestLink = typeof window !== "undefined" 
@@ -519,7 +541,7 @@ export function AdminDashboard() {
                             <div className="flex items-center justify-between">
                               <div className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
                                 {request.status === "pending" && "Pendente"}
-                                {request.status === "in_progress" && "Em análise"}
+                                {request.status === "in_progress" && "Análise"}
                                 {request.status === "completed" && "Concluído"}
                                 {request.status === "rejected" && "Rejeitado"}
                               </div>
@@ -534,7 +556,7 @@ export function AdminDashboard() {
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="pending">Pendente</SelectItem>
-                                    <SelectItem value="in_progress">Em análise</SelectItem>
+                                    <SelectItem value="in_progress">Análise</SelectItem>
                                     <SelectItem value="completed">Concluído</SelectItem>
                                     <SelectItem value="rejected">Rejeitado</SelectItem>
                                   </SelectContent>
@@ -592,7 +614,7 @@ export function AdminDashboard() {
                         <TableCell><Skeleton className="h-8 w-[120px]" /></TableCell>
                       </TableRow>
                     ))
-                  ) : (
+                  ) : paginatedRequests.length > 0 ? (
                     <AnimatePresence mode="popLayout">
                       {paginatedRequests.map((request) => (
                         <motion.tr
@@ -625,13 +647,13 @@ export function AdminDashboard() {
                             {request.type === "fix" && "Corrigir"}
                           </TableCell>
                           <TableCell>
-                            <span className="text-yellow-400 font-bold">#{request.counter || 1}</span>
+                            <span className="text-center text-yellow-400 font-bold">{request.counter || 1}</span>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <div className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
                                 {request.status === "pending" && "Pendente"}
-                                {request.status === "in_progress" && "Em análise"}
+                                {request.status === "in_progress" && "Análise"}
                                 {request.status === "completed" && "Concluído"}
                                 {request.status === "rejected" && "Rejeitado"}
                               </div>
@@ -645,7 +667,7 @@ export function AdminDashboard() {
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="pending">Pendente</SelectItem>
-                                  <SelectItem value="in_progress">Em análise</SelectItem>
+                                  <SelectItem value="in_progress">Análise</SelectItem>
                                   <SelectItem value="completed">Concluído</SelectItem>
                                   <SelectItem value="rejected">Rejeitado</SelectItem>
                                 </SelectContent>
@@ -660,7 +682,7 @@ export function AdminDashboard() {
                             <Button 
                                 variant="ghost" 
                                 size="sm"
-                                onClick={() => router.push(`/request/${request._id}`)}
+                                onClick={() => handleShowUsers(request)}
                                 className="hover:bg-[#3E3E3E]"
                               >
                                 <UsersRound className="h-4 w-4" />
@@ -686,6 +708,12 @@ export function AdminDashboard() {
                         </motion.tr>
                       ))}
                     </AnimatePresence>
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-gray-400 py-4">
+                        Nenhum resultado encontrado.
+                      </TableCell>
+                    </TableRow>
                   )}
                 </TableBody>
               </Table>
@@ -721,13 +749,42 @@ export function AdminDashboard() {
 
       {/* Users Dialog */}
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
-        <DialogContent>
+      <DialogContent>
           <DialogHeader>
-            <DialogTitle>Solicitantes</DialogTitle>
+            <DialogTitle>Usuários que solicitaram este conteúdo</DialogTitle>
           </DialogHeader>
-          <div className="flex items-center gap-2 mt-4">
-            {/* Solicitantes aqui */}
+          <div className="py-4">
+            {loadingUsers ? (
+              <div className="text-center py-4">
+                <p>Carregando usuários...</p>
+              </div>
+            ) : requestUsers.length > 0 ? (
+              <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                {requestUsers.map((user) => (
+                  <div key={user._id} className="flex items-center justify-between p-3 bg-secondary/20 rounded-md">
+                    <div>
+                      <p className="font-medium">{user.name}</p>
+                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                      {user.provider && (
+                        <p className="text-xs text-muted-foreground">
+                          {user.provider} • {user.username || 'N/A'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p>Nenhum usuário encontrado</p>
+              </div>
+            )}
           </div>
+          <DialogFooter>
+            <Button onClick={() => setUsersDialogOpen(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

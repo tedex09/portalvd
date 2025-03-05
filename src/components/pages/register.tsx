@@ -16,6 +16,8 @@ const formSchema = z.object({
   email: z.string().email("Email inválido"),
   password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
   whatsapp: z.string().min(11, "WhatsApp inválido").max(11, "WhatsApp inválido"),
+  provider: z.string().optional(),
+  username: z.string().optional(),
 });
 
 export function Register() {
@@ -29,6 +31,8 @@ export function Register() {
       email: "",
       password: "",
       whatsapp: "",
+      provider: "",
+      username: "",
     },
   });
 
@@ -141,6 +145,36 @@ export function Register() {
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name="provider"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nome do Servidor</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Seu servidor" {...field} />
+                    </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {form.watch("provider") && form.watch("provider") !== "" && (
+              <FormField
+                control={form.control}
+                name="username"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Usuário no servidor</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Seu nome de usuário" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? "Criando conta..." : "Criar conta"}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Film, Tv, Trash2, Calendar, Clock, ArrowLeft, CheckCircle2, AlertCircle, MessageCircle } from "lucide-react";
+import { Film, Tv, Trash2, Calendar, Clock, ArrowLeft, CheckCircle2, AlertCircle, MessageCircle, UsersRound } from "lucide-react";
 import { 
   AlertDialog, 
   AlertDialogAction, 
@@ -63,6 +63,9 @@ export function RequestDetails({ request, isOwner, isAdmin }) {
   const [rejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("low_demand");
   const [customRejectionReason, setCustomRejectionReason] = useState("");
+  const [usersDialogOpen, setUsersDialogOpen] = useState(false);
+  const [requestUsers, setRequestUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const isMobile = useIsMobile();
 
   const { updateRequestStatus, updateRequestWithRejection } = useRequestsStore();
@@ -141,6 +144,29 @@ export function RequestDetails({ request, isOwner, isAdmin }) {
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const fetchRequestUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      const response = await fetch(`/api/admin/requests/users?mediaId=${request.mediaId}&mediaType=${request.mediaType}&type=${request.type}`);
+      
+      if (!response.ok) throw new Error("Failed to fetch users");
+      
+      const data = await response.json();
+      setRequestUsers(data.users);
+    } catch (error) {
+      toast.error("Erro ao carregar usuários", {
+        description: "Não foi possível carregar a lista de usuários"
+      });
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleShowUsers = () => {
+    fetchRequestUsers();
+    setUsersDialogOpen(true);
   };
 
   const StatusIcon = statusMap[status]?.icon || Clock;
@@ -298,6 +324,17 @@ export function RequestDetails({ request, isOwner, isAdmin }) {
                             <SelectItem value="rejected">Rejeitado</SelectItem>
                           </SelectContent>
                         </Select>
+                        
+                        {isAdmin && (
+                          <Button
+                            variant="outline"
+                            onClick={handleShowUsers}
+                            className="flex items-center gap-2"
+                          >
+                            <UsersRound className="h-4 w-4" />
+                            <span>Ver Solicitantes</span>
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -436,6 +473,50 @@ export function RequestDetails({ request, isOwner, isAdmin }) {
               className="bg-[#B91D3A] hover:bg-[#D71E50]"
             >
               Confirmar Rejeição
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Users Dialog */}
+      <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Usuários que solicitaram este conteúdo</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {loadingUsers ? (
+              <div className="text-center py-4">
+                <p>Carregando usuários...</p>
+              </div>
+            ) : requestUsers.length > 0 ? (
+              <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                {requestUsers.map((user) => (
+                  <div key={user._id} className="flex items-center justify-between p-3 bg-secondary/20 rounded-md">
+                    <div>
+                      <p className="font-medium">{user.name}</p>
+                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                      {user.provider && (
+                        <p className="text-xs text-muted-foreground">
+                          {user.provider} • {user.username || 'N/A'}
+                        </p>
+                      )}
+                    </div>
+                    <Badge className={`${statusMap[user.status].color} text-white`}>
+                      {statusMap[user.status].label}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p>Nenhum usuário encontrado</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setUsersDialogOpen(false)}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

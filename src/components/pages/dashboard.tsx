@@ -10,25 +10,51 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Film, Tv, Plus, Wrench, RefreshCw, Share2, Copy, LogOut } from "lucide-react";
+import { Film, Tv, Plus, Wrench, RefreshCw, Share2, Copy, LogOut, User, Lock } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { signOut } from "next-auth/react";
+import { Label } from "@/components/ui/label";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
 const ITEMS_PER_PAGE = 5;
+
+const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(1, "Senha atual é obrigatória"),
+  newPassword: z.string().min(6, "Nova senha deve ter pelo menos 6 caracteres"),
+  confirmPassword: z.string().min(6, "Confirmação de senha é obrigatória"),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "As senhas não coincidem",
+  path: ["confirmPassword"],
+});
 
 export function Dashboard() {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [selectedRequestId, setSelectedRequestId] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const { toast } = useToast();
+
+  const passwordForm = useForm<z.infer<typeof passwordChangeSchema>>({
+    resolver: zodResolver(passwordChangeSchema),
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
+  });
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ['requests'],
@@ -70,7 +96,53 @@ export function Dashboard() {
     await signOut({ redirect: false });
     router.push("/login");
   };
-  
+
+  const handleShare = (requestId: string) => {
+    setSelectedRequestId(requestId);
+    setShareDialogOpen(true);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({
+      title: "Link copiado!",
+      description: "O link foi copiado para a área de transferência."
+    });
+  };
+
+  const onPasswordSubmit = async (values: z.infer<typeof passwordChangeSchema>) => {
+    try {
+      setIsChangingPassword(true);
+      const response = await fetch("/api/user/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          currentPassword: values.currentPassword,
+          newPassword: values.newPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Falha ao alterar senha");
+      }
+
+      toast.success("Senha alterada com sucesso!", {
+        description: "Sua senha foi atualizada.",
+      });
+      
+      setPasswordDialogOpen(false);
+      passwordForm.reset();
+    } catch (error) {
+      toast.error("Erro ao alterar senha", {
+        description: error instanceof Error ? error.message : "Tente novamente mais tarde",
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -86,19 +158,6 @@ export function Dashboard() {
     );
   }
 
-  const handleShare = (requestId: string) => {
-    setSelectedRequestId(requestId);
-    setShareDialogOpen(true);
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast({
-      title: "Link copiado!",
-      description: "O link foi copiado para a área de transferência."
-    });
-  };
-
   return (
     <div className="container mx-auto py-8">
       <motion.div 
@@ -107,7 +166,7 @@ export function Dashboard() {
         className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
       >
         <div>
-          <h1 className="text-3xl font-bold">Minhas Solicitações</h1>
+          <h1 className="text-3xl font-bold gradient-text">Minhas Solicitações</h1>
           <p className="text-muted-foreground">
             Acompanhe o status das suas solicitações
           </p>
@@ -243,7 +302,10 @@ export function Dashboard() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleShare(request._id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShare(request._id);
+                          }}
                           className="hover:bg-[#3E3E3E]"
                         >
                           <Share2 className="h-4 w-4" />
@@ -307,13 +369,23 @@ export function Dashboard() {
         </div>
       )}
 
-      <Button 
-        variant="ghost" 
-        className="w-auto justify-start gap-2 text-red-400 hover:text-red-300 hover:bg-red-900/20"
-        onClick={handleLogout}
-      >
-        <LogOut className="w-4 h-4" /> Sair
-      </Button>
+      <div className="flex flex-wrap gap-4 mt-8">
+        <Button 
+          variant="outline" 
+          className="gap-2"
+          onClick={() => setPasswordDialogOpen(true)}
+        >
+          <Lock className="w-4 h-4" /> Alterar Senha
+        </Button>
+        
+        <Button 
+          variant="ghost" 
+          className="gap-2 text-red-400 hover:text-red-300 hover:bg-red-900/20"
+          onClick={handleLogout}
+        >
+          <LogOut className="w-4 h-4" /> Sair
+        </Button>
+      </div>
 
       {/* Share Dialog */}
       <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
@@ -334,6 +406,69 @@ export function Dashboard() {
               <Copy className="h-4 w-4" />
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Password Change Dialog */}
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar Senha</DialogTitle>
+          </DialogHeader>
+          <Form {...passwordForm}>
+            <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
+              <FormField
+                control={passwordForm.control}
+                name="currentPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Senha Atual</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="Digite sua senha atual" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={passwordForm.control}
+                name="newPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nova Senha</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="Digite sua nova senha" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={passwordForm.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirmar Nova Senha</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="Confirme sua nova senha" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setPasswordDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={isChangingPassword}>
+                  {isChangingPassword ? "Alterando..." : "Alterar Senha"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </div>
