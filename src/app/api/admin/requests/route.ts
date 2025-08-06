@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import dbConnect from "@/lib/db";
 import Request from "@/models/Request";
-import { cacheGet, cacheSet, cacheDelete } from "@/lib/redis";
+import { cacheGet, cacheSet, cacheDelete } from "@/lib/cache";
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,10 +14,14 @@ export async function GET(req: NextRequest) {
     const searchParams = req.nextUrl.searchParams;
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
+    const mediaType = searchParams.get("mediaType");
+    const requestType = searchParams.get("requestType");
+    const sortBy = searchParams.get("sortBy");
+    const sortOrder = searchParams.get("sortOrder") || "desc";
     const skip = (page - 1) * limit;
 
-    // Try to get from cache
-    const cacheKey = `admin:requests:${page}:${limit}`;
+    // Build cache key with filters
+    const cacheKey = `admin:requests:${page}:${limit}:${mediaType || 'all'}:${requestType || 'all'}:${sortBy || 'none'}:${sortOrder}`;
     const cached = await cacheGet(cacheKey);
     if (cached) {
       return NextResponse.json(cached);
@@ -25,12 +29,27 @@ export async function GET(req: NextRequest) {
 
     await dbConnect();
     
+    // Build query filters
+    const query: any = {};
+    if (mediaType && mediaType !== 'all') {
+      query.mediaType = mediaType;
+    }
+    if (requestType && requestType !== 'all') {
+      query.type = requestType;
+    }
+
+    // Build sort options
+    let sortOptions: any = { createdAt: -1 };
+    if (sortBy === 'counter') {
+      sortOptions = { counter: sortOrder === 'asc' ? 1 : -1 };
+    }
+
     const [requests, total] = await Promise.all([
-      Request.find()
-        .sort({ createdAt: -1 })
+      Request.find(query)
+        .sort(sortOptions)
         .skip(skip)
         .populate("userId", "name email"),
-      Request.countDocuments()
+      Request.countDocuments(query)
     ]);
 
     const result = {
@@ -76,7 +95,7 @@ export async function DELETE(req: NextRequest) {
       deleted += batch.length;
     }
 
-    // Clear all request-related cache
+    // Clear cache
     await cacheDelete('admin:requests:*');
 
     return new NextResponse(null, { status: 204 });

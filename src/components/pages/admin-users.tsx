@@ -1,3 +1,4 @@
+"use client";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -28,11 +29,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { Pencil, Trash2, UserPlus, PlaySquare, ArrowLeft, LogOut, Menu, X } from "lucide-react";
+import { Pencil, Trash2, UserPlus, PlaySquare, ArrowLeft, LogOut, Menu, X, Search, ArrowRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { signOut } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+const ITEMS_PER_PAGE = 10;
 
 export function AdminUsers() {
   const { toast } = useToast();
@@ -43,16 +46,28 @@ export function AdminUsers() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const isMobile = useIsMobile();
 
-  const { data: users, isLoading } = useQuery({
-    queryKey: ["users"],
+  const { data: usersData, isLoading } = useQuery({
+    queryKey: ["users", currentPage, searchQuery],
     queryFn: async () => {
-      const response = await fetch("/api/admin/users");
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: ITEMS_PER_PAGE.toString(),
+        ...(searchQuery && { search: searchQuery })
+      });
+      const response = await fetch(`/api/admin/users?${params.toString()}`);
       if (!response.ok) throw new Error("Failed to fetch users");
       return response.json();
     },
   });
+
+  const users = usersData?.users || [];
+  const totalUsers = usersData?.total || 0;
+  const onlineUsers = usersData?.onlineCount || 0;
+  const totalPages = Math.ceil(totalUsers / ITEMS_PER_PAGE);
 
   const createUser = useMutation({
     mutationFn: async (userData: any) => {
@@ -154,7 +169,36 @@ export function AdminUsers() {
     router.push("/login");
   };
 
-  const totalUsers = users?.length || 0;
+  const MetricCard = ({ title, value, icon: Icon, color }: any) => (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <Card className="overflow-hidden relative">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 z-10">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          <Icon className={`h-4 w-4 ${color}`} />
+        </CardHeader>
+        <CardContent className="z-10">
+          <div className="text-2xl font-bold">{value}</div>
+        </CardContent>
+        <div className={`absolute -right-6 -bottom-6 w-16 h-16 rounded-full ${color.replace('text-', 'bg-')}/10 blur-xl`}></div>
+      </Card>
+    </motion.div>
+  );
+
+  const MetricCardSkeleton = () => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-4 w-4 rounded-full" />
+      </CardHeader>
+      <CardContent>
+        <Skeleton className="h-8 w-12" />
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="min-h-screen bg-[#121212] text-white">
@@ -237,6 +281,31 @@ export function AdminUsers() {
 
         {/* Main Content */}
         <div className={`flex-1 p-4 md:p-8 ${isMobile ? 'pt-20' : 'md:ml-64'}`}>
+          {/* Metrics Cards */}
+          <div className="grid gap-4 md:grid-cols-2 mb-8">
+            {isLoading ? (
+              <>
+                <MetricCardSkeleton />
+                <MetricCardSkeleton />
+              </>
+            ) : (
+              <>
+                <MetricCard
+                  title="Total de Usuários"
+                  value={totalUsers}
+                  icon={UserPlus}
+                  color="text-blue-500"
+                />
+                <MetricCard
+                  title="Usuários Online"
+                  value={onlineUsers}
+                  icon={PlaySquare}
+                  color="text-green-500"
+                />
+              </>
+            )}
+          </div>
+
           <div className="flex justify-between items-center mb-8">
             <div>
               <h1 className="text-3xl font-bold">Gerenciar Usuários</h1>
@@ -343,6 +412,21 @@ export function AdminUsers() {
             </Dialog>
           </div>
 
+          {/* Search Bar */}
+          <div className="mb-6">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                placeholder="Buscar por nome ou email..."
+                className="pl-10 bg-[#282828] border-none"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1); // Reset to first page when searching
+                }}
+              />
+            </div>
+          </div>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -474,6 +558,33 @@ export function AdminUsers() {
                 )}
                 </TableBody>
               </Table>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between p-4 bg-[#282828]">
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="bg-[#3E3E3E] border-none"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Anterior
+                </Button>
+                <span className="text-sm text-gray-400">
+                  Página {currentPage} de {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="bg-[#3E3E3E] border-none"
+                >
+                  Próxima
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
             )}
           </motion.div>
         </div>

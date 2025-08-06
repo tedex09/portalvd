@@ -11,7 +11,7 @@ interface RequestsState {
     counter: string;
     search: string;
   };
-  fetchRequests: () => Promise<void>;
+  fetchRequests: (mediaType?: string, requestType?: string, sortBy?: string, sortOrder?: string) => Promise<void>;
   updateRequestStatus: (requestId: string, status: string) => Promise<void>;
   updateRequestWithRejection: (requestId: string, status: string, rejectionReason: string) => Promise<void>;
   optimisticUpdateStatus: (requestId: string, status: string) => void;
@@ -39,10 +39,18 @@ export const useRequestsStore = create<RequestsState>()(
         }));
       },
 
-      fetchRequests: async () => {
+      fetchRequests: async (mediaType = 'all', requestType = 'all', sortBy = '', sortOrder = 'desc') => {
         try {
           set({ isLoading: true, error: null });
-          const response = await fetch('/api/admin/requests');
+          const params = new URLSearchParams();
+          if (mediaType !== 'all') params.append('mediaType', mediaType);
+          if (requestType !== 'all') params.append('requestType', requestType);
+          if (sortBy) {
+            params.append('sortBy', sortBy);
+            params.append('sortOrder', sortOrder);
+          }
+          
+          const response = await fetch(`/api/admin/requests?${params.toString()}`);
           if (!response.ok) throw new Error('Failed to fetch requests');
           const data = await response.json();
           set({ requests: data.items, isLoading: false });

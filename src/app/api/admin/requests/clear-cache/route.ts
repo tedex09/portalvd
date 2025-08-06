@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { cacheDelete } from "@/lib/redis";
+import { cacheDelete } from "@/lib/cache";
 
 export async function POST(req: NextRequest) {
   try {

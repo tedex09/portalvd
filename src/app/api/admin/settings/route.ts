@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import dbConnect from "@/lib/db";
 import Settings from "@/models/Settings";
-import { cacheDelete } from "@/lib/redis";
+import { cacheDelete } from "@/lib/cache";
 
 export async function GET() {
   try {

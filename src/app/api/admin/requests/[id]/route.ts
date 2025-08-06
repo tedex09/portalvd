@@ -4,7 +4,7 @@ import dbConnect from "@/lib/db";
 import Request from "@/models/Request";
 import User from "@/models/User";
 import { sendWhatsAppNotification } from "@/lib/twilio";
-import { cacheDelete } from "@/lib/redis";
+import { cacheDelete } from "@/lib/cache";
 
 export async function GET(req: NextRequest) {
   try {

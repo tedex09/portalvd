@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   PlaySquare, Search, Clock, CheckCircle2, 
-  AlertCircle, Users, UsersRound, Settings, Eye, 
+  AlertCircle, Users, UsersRound, Settings, Eye, ArrowUpDown,
   Share2, Copy, ArrowLeft, ArrowRight, LogOut, BarChart3, Menu, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,10 @@ export function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [counterFilter, setCounterFilter] = useState("high");
+  const [mediaTypeFilter, setMediaTypeFilter] = useState("all");
+  const [requestTypeFilter, setRequestTypeFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("");
+  const [sortOrder, setSortOrder] = useState("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selectedRequestId, setSelectedRequestId] = useState("");
@@ -58,8 +62,8 @@ export function AdminDashboard() {
   const { requests, isLoading, fetchRequests, updateRequestStatus, updateRequestWithRejection } = useRequestsStore();
 
   useEffect(() => {
-    fetchRequests();
-  }, [fetchRequests]);
+    fetchRequests(mediaTypeFilter, requestTypeFilter, sortBy, sortOrder);
+  }, [fetchRequests, mediaTypeFilter, requestTypeFilter, sortBy, sortOrder]);
 
   useEffect(() => {
     // Set up a daily check for low-demand requests
@@ -72,7 +76,7 @@ export function AdminDashboard() {
           const data = await response.json();
           if (data.updated > 0) {
             toast.info(`${data.updated} solicitações com baixa demanda foram rejeitadas automaticamente.`);
-            fetchRequests();
+            fetchRequests(mediaTypeFilter, requestTypeFilter, sortBy, sortOrder);
           }
         }
       } catch (error) {
@@ -86,7 +90,7 @@ export function AdminDashboard() {
     // Set up daily check
     const interval = setInterval(checkLowDemandRequests, 24 * 60 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [fetchRequests]);
+  }, [fetchRequests, mediaTypeFilter, requestTypeFilter, sortBy, sortOrder]);
 
   const metrics = {
     total: requests?.length || 0,
@@ -96,6 +100,14 @@ export function AdminDashboard() {
     rejected: requests?.filter(r => r.status === "rejected").length || 0
   };
 
+  const handleSortByCounter = () => {
+    if (sortBy === 'counter') {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy('counter');
+      setSortOrder('desc');
+    }
+  };
   // Filter requests and remove duplicates
   const filteredRequests = requests ? requests.filter(request => {
     const matchesSearch = request.mediaTitle?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -455,6 +467,27 @@ export function AdminDashboard() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
+              <Select value={mediaTypeFilter} onValueChange={setMediaTypeFilter}>
+                <SelectTrigger className="w-full md:w-[180px] bg-[#282828] border-none">
+                  <SelectValue placeholder="Tipo de conteúdo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="movie">Filmes</SelectItem>
+                  <SelectItem value="tv">Séries</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={requestTypeFilter} onValueChange={setRequestTypeFilter}>
+                <SelectTrigger className="w-full md:w-[180px] bg-[#282828] border-none">
+                  <SelectValue placeholder="Tipo de solicitação" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="add">Adicionar</SelectItem>
+                  <SelectItem value="update">Atualizar</SelectItem>
+                  <SelectItem value="fix">Corrigir</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-full md:w-[180px] bg-[#282828] border-none">
                   <SelectValue placeholder="Status" />
@@ -595,7 +628,20 @@ export function AdminDashboard() {
                     <TableHead>Capa</TableHead>
                     <TableHead>Título</TableHead>
                     <TableHead>Tipo</TableHead>
-                    <TableHead>Demanda</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-[#3E3E3E] transition-colors"
+                      onClick={handleSortByCounter}
+                    >
+                      <div className="flex items-center gap-1">
+                        Demanda
+                        <ArrowUpDown className="h-3 w-3" />
+                        {sortBy === 'counter' && (
+                          <span className="text-xs">
+                            {sortOrder === 'asc' ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
+                    </TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Data</TableHead>
                     <TableHead>Ações</TableHead>
